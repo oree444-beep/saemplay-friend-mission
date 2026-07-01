@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { Handshake, Star, Settings, Trophy, RotateCcw, Plus, QrCode, ExternalLink, Volume2, VolumeX } from 'lucide-react';
 import './style.css';
 
-const VERSION = '친구찾기 챌린지 V5';
-const STORAGE_KEY = 'saemplay_friend_mission_v5_state';
+const VERSION = '친구찾기 챌린지 V6';
+const STORAGE_KEY = 'saemplay_friend_mission_v6_state';
 
 const defaultMissions = [
   '같은 색 옷 친구와 하이파이브', '오늘 웃은 친구와 인사하기', '키가 비슷한 친구끼리 짝 만들기', '3명 모여 삼각형 만들기', '친구에게 엄지척 해주기',
@@ -59,6 +59,9 @@ function normalizeNameList(input){
 function pruneHistory(history){
   const now = Date.now();
   return (history || []).filter(h => h && h.id && now - Number(h.at || 0) < HISTORY_MS);
+}
+function shuffle(arr){
+  return [...arr].sort(() => Math.random() - 0.5);
 }
 function buildMissionDeck(eligible, count, history){
   const need = Math.max(1, Number(count) || 1);
@@ -180,14 +183,30 @@ function App(){
     if(missionScope === 'all') return visible;
     return visible.filter(m=>!m.excluded);
   };
-  const shuffle = (arr) => [...arr].sort(()=>Math.random()-.5);
   const startGame = () => {
-    ensureAudio(); beep('start'); setRoundIndex(0); setScores([]);
-    const history = pruneHistory(missionHistory);
-    const deck = buildMissionDeck(eligibleMissions(), Number(missionCount), history);
-    setRounds(deck);
-    setMissionHistory([...history, ...deck.map(m => ({id:m.id, at:Date.now()}))]);
-    setPhase('promise');
+    try {
+      const candidates = eligibleMissions();
+      if(!candidates.length){
+        alert('실행 가능한 미션이 없습니다. 미션 관리자에서 숨김/X 제외 상태를 확인해주세요.');
+        return;
+      }
+      ensureAudio();
+      beep('start');
+      setRoundIndex(0);
+      setScores([]);
+      const history = pruneHistory(missionHistory);
+      const deck = buildMissionDeck(candidates, Number(missionCount), history);
+      if(!deck.length){
+        alert('선택 가능한 미션을 만들지 못했습니다. 미션 설정을 확인해주세요.');
+        return;
+      }
+      setRounds(deck);
+      setMissionHistory([...history, ...deck.map(m => ({id:m.id, at:Date.now()}))]);
+      setPhase('promise');
+    } catch (err) {
+      console.error('친구찾기 시작 오류', err);
+      alert('친구찾기 시작 중 오류가 발생했습니다. 미션 설정을 확인해주세요.');
+    }
   };
   const countdownStart = () => { ensureAudio(); setPhase('count3'); beep('count'); setTimeout(()=>{setPhase('count2'); beep('count')}, 900); setTimeout(()=>{setPhase('count1'); beep('count')}, 1800); setTimeout(()=>{setRemaining(pickTime()); setPhase('mission'); beep('start')}, 2700); };
   const nextMission = () => { if(roundIndex + 1 >= rounds.length){ setPhase('finish'); return; } setRoundIndex(i=>i+1); countdownStart(); };
@@ -211,13 +230,13 @@ function App(){
   return <TV {...{phase, missionCount, setMissionCount, timeOption, setTimeOption, customTime, setCustomTime, missionScope, setMissionScope, missions, setMissions, startGame, countdownStart, nextMission, addScore, newName, setNewName, scores, resetGame, currentMission, roundIndex, rounds, remaining, soundLevel, setSoundLevel, ensureAudio, qrUrl, openRemote, audioReady, managerOpen, setManagerOpen, resetMissionHistory}} />;
 }
 
-function Header({openRemote}){return <header className="top"><div className="brand"><div className="logo"><Handshake size={30}/></div><div><h1>친구찾기 챌린지 V5</h1><p>쌤플레이 게임실험실 안에서 테스트하는 친구찾기 챌린지 독립 테스트판</p></div></div><div className="topBtns"><button onClick={()=>location.reload()}>처음으로</button><button onClick={openRemote} className="primary"><ExternalLink size={16}/> 리모컨 새창</button><button className="test">테스트 전용</button></div></header>}
+function Header({openRemote}){return <header className="top"><div className="brand"><div className="logo"><Handshake size={30}/></div><div><h1>친구찾기 챌린지 V6</h1><p>쌤플레이 게임실험실 안에서 테스트하는 친구찾기 챌린지 독립 테스트판</p></div></div><div className="topBtns"><button onClick={()=>location.reload()}>처음으로</button><button onClick={openRemote} className="primary"><ExternalLink size={16}/> 리모컨 새창</button><button className="test">테스트 전용</button></div></header>}
 function TV(props){
   const {phase, openRemote, qrUrl, soundLevel, setSoundLevel, ensureAudio} = props;
   const soundOn = soundLevel !== 'off';
   return <div className="app"><Header openRemote={openRemote}/><main className="screen">{phase==='setup'&&<Setup {...props}/>} {phase==='promise'&&<Promise {...props}/>} {phase?.startsWith('count')&&<Count {...props}/>} {phase==='mission'&&<Mission {...props}/>} {phase==='stop'&&<Stop {...props}/>} {phase==='finish'&&<Finish {...props}/>}</main><div className="floating"><button onClick={()=>{ensureAudio();setSoundLevel(soundOn?'off':'loud')}}>{soundOn?<Volume2 size={16}/>:<VolumeX size={16}/>} 효과음</button><button onClick={openRemote}><ExternalLink size={16}/> 리모컨</button><button className="dark"><QrCode size={16}/> QR</button></div><div className="qrBox"><img src={qrUrl}/><span>QR로 리모컨 연결</span></div></div>
 }
-function Setup({missionCount,setMissionCount,timeOption,setTimeOption,customTime,setCustomTime,missionScope,setMissionScope,missions,setMissions,startGame,openRemote,soundLevel,setSoundLevel,ensureAudio,managerOpen,setManagerOpen,resetMissionHistory}){return <section className="panel setup compactSetup"><h2>친구찾기 챌린지 설정</h2><p className="desc">아이들이 뛰지 않고 걸어서 조건에 맞는 친구를 찾는 안전한 레크리에이션 게임입니다.</p><div className="grid"><Control label="미션 횟수"><Select value={missionCount} onChange={setMissionCount} options={[3,5,7,10,'custom'].map(v=>[v,v==='custom'?'직접입력':`${v}회`])}/>{missionCount==='custom'&&<input type="number" min="1" max="30" onChange={e=>setMissionCount(e.target.value)} placeholder="횟수"/>}</Control><Control label="제한시간"><Select value={timeOption} onChange={setTimeOption} options={[[5,'5초'],[7,'7초'],[10,'10초'],[15,'15초'],['random','랜덤'],['custom','직접입력']]}/>{timeOption==='custom'&&<input type="number" min="3" max="60" value={customTime} onChange={e=>setCustomTime(e.target.value)}/>}</Control><Control label="미션 범위"><Select value={missionScope} onChange={setMissionScope} options={[[ 'favorite','즐겨찾기만'],['active','X 제외 전체'],['all','전체']]}/></Control><Control label="테스트 조작"><button onClick={openRemote} className="wide"><ExternalLink size={18}/> 리모컨 새창으로 열기</button><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/><p className="hint">효과음 기본값은 학원 환경 기준 ‘크게’입니다.</p><button onClick={()=>setManagerOpen(true)} className="wide"><Settings size={18}/> 미션 관리자</button><button onClick={resetMissionHistory} className="wide"><RotateCcw size={18}/> 출현기록 초기화</button></Control></div><button className="bigStart" onClick={startGame}>친구찾기 시작</button>{managerOpen&&<MissionManagerModal missions={missions} setMissions={setMissions} onClose={()=>setManagerOpen(false)}/>}</section>}
+function Setup({missionCount,setMissionCount,timeOption,setTimeOption,customTime,setCustomTime,missionScope,setMissionScope,missions,setMissions,startGame,openRemote,soundLevel,setSoundLevel,ensureAudio,managerOpen,setManagerOpen,resetMissionHistory}){return <section className="panel setup compactSetup"><h2>친구찾기 챌린지 설정</h2><p className="desc">아이들이 뛰지 않고 걸어서 조건에 맞는 친구를 찾는 안전한 레크리에이션 게임입니다.</p><div className="setupGridV6"><div className="setupGroup"><h3>게임 설정</h3><Control label="미션 횟수"><Select value={missionCount} onChange={setMissionCount} options={[3,5,7,10,'custom'].map(v=>[v,v==='custom'?'직접입력':`${v}회`])}/>{missionCount==='custom'&&<input type="number" min="1" max="30" onChange={e=>setMissionCount(e.target.value)} placeholder="횟수"/>}</Control><Control label="제한시간"><Select value={timeOption} onChange={setTimeOption} options={[[5,'5초'],[7,'7초'],[10,'10초'],[15,'15초'],['random','랜덤'],['custom','직접입력']]}/>{timeOption==='custom'&&<input type="number" min="3" max="60" value={customTime} onChange={e=>setCustomTime(e.target.value)}/>}</Control><Control label="미션 범위"><Select value={missionScope} onChange={setMissionScope} options={[[ 'favorite','즐겨찾기만'],['active','X 제외 전체'],['all','전체']]}/></Control></div><div className="setupGroup actionGroup"><h3>테스트 조작</h3><button onClick={openRemote} className="wide noWrap"><ExternalLink size={18}/> 리모컨 열기</button><Control label="효과음 크기"><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/><p className="hint">기본값은 학원 환경 기준 ‘크게’입니다.</p></Control><button onClick={()=>setManagerOpen(true)} className="wide noWrap"><Settings size={18}/> 미션 관리자</button><button onClick={resetMissionHistory} className="wide noWrap"><RotateCcw size={18}/> 출현기록 초기화</button></div></div><button className="bigStart" onClick={startGame}>친구찾기 시작</button>{managerOpen&&<MissionManagerModal missions={missions} setMissions={setMissions} onClose={()=>setManagerOpen(false)}/>}</section>}
 function Promise({countdownStart}){return <section className="panel promise"><h2>친구찾기 약속!</h2><ol><li>뛰지 않기</li><li>밀지 않기</li><li>친구가 싫어하면 억지로 잡지 않기</li><li>선생님 신호에 멈추기</li></ol><button className="bigStart" onClick={countdownStart}>다음 진행</button><p className="desc">자동으로 넘어가지 않습니다. 선생님이 읽어준 뒤 눌러주세요.</p></section>}
 function Count({phase, roundIndex, rounds}){ const n = phase==='count3'?3:phase==='count2'?2:1; return <section className="count"><div className="smallTitle">친구찾기 미션 {roundIndex+1} / {rounds.length}</div><div className="countNum">{n}</div></section>}
 function Mission({currentMission, roundIndex, rounds, remaining}){
@@ -233,7 +252,7 @@ function Finish({scores, resetGame}){
   const sorted=[...scores].sort((a,b)=>b.score-a.score || a.name.localeCompare(b.name, 'ko'));
   const topScore = sorted[0]?.score || 0;
   return <section className="panel finish"><h2>미션이 끝났습니다!</h2><h3>친구찾기 챌린지 결과</h3><div className="scoreList rankList">{sorted.length?sorted.map((s)=>{ const isTop = s.score === topScore; return <div key={s.name} className={isTop?'topRank':''}><span className="rankBadge">{isTop?'🏆 1등':'성공자'}</span><strong className="scoreName">{s.name}</strong><b>{s.score}점</b></div>}):<p>기록된 성공자가 없습니다.</p>}</div><button className="bigStart" onClick={resetGame}>설정으로</button></section>}
-function Remote(props){ const {phase,startGame,countdownStart,nextMission,resetGame,currentMission,roundIndex,rounds,remaining,newName,setNewName,addScore,scores,soundLevel,setSoundLevel,ensureAudio,openRemote}=props; return <div className="remote"><h1>친구찾기 리모컨 V5</h1><p className="badge">현재: {phase}</p>{currentMission&&<div className="remoteMission">{roundIndex+1}/{rounds.length}<br/>{currentMission.text}<br/><b>{remaining}초</b></div>}<button onClick={startGame} className="primary wide">시작</button><button onClick={countdownStart} className="wide">다음 진행</button><button onClick={nextMission} className="wide">다음 미션</button><div className="scoreInput remoteScore"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="성공자 예) 순신, 임당"/><button onClick={addScore}>+1 기록</button></div><p className="inputHint">여러 명은 쉼표(,)로 구분해 입력하세요.</p><div className="remoteSound"><label>효과음 크기</label><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/></div><button onClick={openRemote} className="wide">리모컨 새창</button><button onClick={resetGame} className="wide danger">설정으로</button><h2>점수표</h2>{[...scores].sort((a,b)=>b.score-a.score).map(s=><div className="rScore" key={s.name}>{s.name}<b>{s.score}</b></div>)}</div>}
+function Remote(props){ const {phase,startGame,countdownStart,nextMission,resetGame,currentMission,roundIndex,rounds,remaining,newName,setNewName,addScore,scores,soundLevel,setSoundLevel,ensureAudio,openRemote}=props; return <div className="remote"><h1>친구찾기 리모컨 V6</h1><p className="badge">현재: {phase}</p>{currentMission&&<div className="remoteMission">{roundIndex+1}/{rounds.length}<br/>{currentMission.text}<br/><b>{remaining}초</b></div>}<button onClick={startGame} className="primary wide">시작</button><button onClick={countdownStart} className="wide">다음 진행</button><button onClick={nextMission} className="wide">다음 미션</button><div className="scoreInput remoteScore"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="성공자 예) 순신, 임당"/><button onClick={addScore}>+1 기록</button></div><p className="inputHint">여러 명은 쉼표(,)로 구분해 입력하세요.</p><div className="remoteSound"><label>효과음 크기</label><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/></div><button onClick={openRemote} className="wide">리모컨 새창</button><button onClick={resetGame} className="wide danger">설정으로</button><h2>점수표</h2>{[...scores].sort((a,b)=>b.score-a.score).map(s=><div className="rScore" key={s.name}>{s.name}<b>{s.score}</b></div>)}</div>}
 function MissionManagerModal({missions,setMissions,onClose}){ const [text,setText]=useState(''); const add=()=>{if(!text.trim())return; setMissions([...missions,{id:Date.now()+'' ,text:text.trim(),favorite:true,excluded:false,deleted:false,base:false}]);setText('')}; const update=(id,patch)=>setMissions(missions.map(m=>m.id===id?{...m,...patch}:m)); const hide=(m)=>update(m.id,{deleted:true}); const removeCustom=(m)=>{ if(confirm('추가한 미션을 삭제할까요?')) setMissions(missions.filter(x=>x.id!==m.id)); }; const restore=()=>setMissions(missions.map(m=>m.base?{...m,deleted:false,excluded:false}:m)); const hidden=missions.filter(m=>m.deleted); return <div className="modalOverlay"><div className="managerModal"><div className="managerHead"><div><h3>미션 관리자</h3><p>수업 시작 화면과 분리된 PC 전용 관리 화면입니다. 기본 미션은 삭제되지 않고 숨김 처리됩니다.</p></div><button onClick={onClose}>닫기</button></div><div className="add"><input value={text} onChange={e=>setText(e.target.value)} placeholder="새 미션 추가"/><button onClick={add}><Plus size={16}/>추가</button><button onClick={restore}><RotateCcw size={16}/>기본 미션 복구</button></div><div className="missionList adminList">{missions.filter(m=>!m.deleted).slice(0,120).map(m=><div className="mItem" key={m.id}><button onClick={()=>update(m.id,{favorite:!m.favorite})} className={m.favorite?'star on':'star'}><Star size={16}/></button><input value={m.text} onChange={e=>update(m.id,{text:e.target.value})}/><button onClick={()=>update(m.id,{excluded:!m.excluded})} className={m.excluded?'x on':'x'}>X</button><button onClick={()=>m.base?hide(m):removeCustom(m)}>{m.base?'숨김':'삭제'}</button></div>)}</div>{hidden.length>0&&<details className="hiddenBox"><summary>숨긴 미션 보기/복구 ({hidden.length})</summary>{hidden.map(m=><div className="mItem" key={m.id}><input value={m.text} onChange={e=>update(m.id,{text:e.target.value})}/><button onClick={()=>update(m.id,{deleted:false})}>복구</button></div>)}</details>}</div></div>}
 function Control({label,children}){return <div className="control"><label>{label}</label>{children}</div>}
 function Select({value,onChange,options}){return <select value={value} onChange={e=>onChange(e.target.value)}>{options.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select>}
