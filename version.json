@@ -1,17 +1,19 @@
 {
   "name": "saemplay-friend-mission",
-  "displayName": "친구찾기 챌린지 V3",
-  "version": "3.0.0",
-  "versionLabel": "친구찾기 챌린지 V3",
+  "displayName": "친구찾기 챌린지 V4",
+  "version": "4",
+  "versionLabel": "친구찾기 챌린지 V4",
   "date": "2026-07-01",
   "status": "test",
   "teamhrPath": "고객용 쌤플레이 테스트버전 > 쌤플레이 게임실험실 > 친구찾기 챌린지",
   "notes": [
-    "Vercel 배포 후 /version.json 404 문제 해결을 위해 public/version.json 추가",
-    "TeamHR 버전 자동 확인용 version.json을 루트와 public 폴더에 함께 포함",
-    "배포 후 https://saemplay-friend-mission.vercel.app/version.json 직접 확인 가능하도록 구조 수정",
-    "V2의 효과음 중심 카운트다운/종료 구조 유지",
-    "리모컨 새창 열기와 QR 연결 유지",
-    "미션 텍스트 대형 표시와 움직이는 이모지 캐릭터 유지"
+    "게임 시작 화면에서 미션 관리 목록을 분리하고 미션 관리자 모달로 이동",
+    "기본 미션은 삭제가 아니라 숨김 처리로 변경",
+    "숨긴 기본 미션 보기/복구 기능 추가",
+    "사용자 추가 미션만 삭제 가능하도록 구분",
+    "미션 텍스트를 TV 전체화면에 꽉 차는 느낌으로 확대",
+    "한글 단어가 중간에 잘리지 않도록 의미 단위 줄바꿈 적용",
+    "보조 이미지는 미션 이해를 돕는 관련 이미지/아이콘으로 표시하되 텍스트와 겹치지 않도록 분리 배치",
+    "version 값은 4처럼 단순 숫자 표기 적용"
   ]
 }
