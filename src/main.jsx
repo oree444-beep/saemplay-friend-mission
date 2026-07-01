@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { Handshake, Star, Settings, Trophy, RotateCcw, Plus, QrCode, ExternalLink, Volume2, VolumeX } from 'lucide-react';
 import './style.css';
 
-const VERSION = '친구찾기 챌린지 V6';
-const STORAGE_KEY = 'saemplay_friend_mission_v6_state';
+const VERSION = '친구찾기 챌린지 V7';
+const STORAGE_KEY = 'saemplay_friend_mission_v7_state';
 
 const defaultMissions = [
   '같은 색 옷 친구와 하이파이브', '오늘 웃은 친구와 인사하기', '키가 비슷한 친구끼리 짝 만들기', '3명 모여 삼각형 만들기', '친구에게 엄지척 해주기',
@@ -90,22 +90,52 @@ function buildMissionDeck(eligible, count, history){
   return deck;
 }
 
+function displayLength(words){
+  return words.join('').length;
+}
 function splitMissionText(text){
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  if(words.length <= 1) return [text];
-  if(text.length <= 14) return [text];
-  const total = words.join('').length;
-  let best = 1, bestScore = Infinity;
-  for(let i=1; i<words.length; i++){
-    const left = words.slice(0,i).join('').length;
-    const right = total - left;
-    const score = Math.abs(left-right) + (i===1 || i===words.length-1 ? 4 : 0);
-    if(score < bestScore){ bestScore = score; best = i; }
+  const raw = String(text || '').trim();
+  const words = raw.split(/\s+/).filter(Boolean);
+  if(words.length <= 1) return [raw];
+  const compactLen = displayLength(words);
+  // TV 미션 문구는 절대 잘리면 안 된다. 짧은 문장만 1줄, 나머지는 의미 단위로 2~3줄 처리.
+  if(compactLen <= 9 && raw.length <= 12) return [raw];
+  const targetLines = compactLen > 18 || words.length >= 7 ? 3 : 2;
+  if(targetLines === 2){
+    let best = 1, bestScore = Infinity;
+    for(let i=1; i<words.length; i++){
+      const left = displayLength(words.slice(0,i));
+      const right = compactLen - left;
+      const edgePenalty = (i===1 || i===words.length-1) ? 5 : 0;
+      const longPenalty = Math.max(left, right) > 11 ? 8 : 0;
+      const score = Math.abs(left-right) + edgePenalty + longPenalty;
+      if(score < bestScore){ bestScore = score; best = i; }
+    }
+    return [words.slice(0,best).join(' '), words.slice(best).join(' ')];
   }
-  return [words.slice(0,best).join(' '), words.slice(best).join(' ')];
+  // 3줄이 필요한 긴 문장은 각 줄 길이 균형을 맞춰 공백 기준으로만 자른다.
+  let bestA = 1, bestB = 2, bestScore = Infinity;
+  for(let a=1; a<words.length-1; a++){
+    for(let b=a+1; b<words.length; b++){
+      const l1 = displayLength(words.slice(0,a));
+      const l2 = displayLength(words.slice(a,b));
+      const l3 = displayLength(words.slice(b));
+      const max = Math.max(l1,l2,l3), min = Math.min(l1,l2,l3);
+      const edgePenalty = (a===1 ? 2 : 0) + (b===words.length-1 ? 2 : 0);
+      const score = (max-min) + edgePenalty + (max > 10 ? 5 : 0);
+      if(score < bestScore){ bestScore = score; bestA = a; bestB = b; }
+    }
+  }
+  return [words.slice(0,bestA).join(' '), words.slice(bestA,bestB).join(' '), words.slice(bestB).join(' ')];
 }
 function visualForMission(text){
   const t = String(text || '');
+  // 구체 명사를 먼저 본다. '색'보다 '양말/신발/옷/모자/안경'이 우선이다.
+  if(t.includes('양말')) return {icon:'🧦', label:'양말 색'};
+  if(t.includes('신발')) return {icon:'👟', label:'신발 색'};
+  if(t.includes('옷')) return {icon:'👕', label:'옷 색'};
+  if(t.includes('모자')) return {icon:'🧢', label:'모자'};
+  if(t.includes('안경')) return {icon:'👓', label:'안경'};
   if(t.includes('별')) return {icon:'⭐', label:'별 모양'};
   if(t.includes('삼각형')) return {icon:'🔺', label:'삼각형'};
   if(t.includes('동그라미') || t.includes('원')) return {icon:'⭕', label:'동그라미'};
@@ -117,8 +147,8 @@ function visualForMission(text){
   if(t.includes('엄지척') || t.includes('최고')) return {icon:'👍', label:'엄지척'};
   if(t.includes('파이팅') || t.includes('응원')) return {icon:'💪', label:'응원'};
   if(t.includes('웃') || t.includes('미소')) return {icon:'😊', label:'웃는 얼굴'};
-  if(t.includes('색') || t.includes('옷')) return {icon:'👕', label:'같은 색'};
   if(t.includes('키')) return {icon:'📏', label:'키 비교'};
+  if(t.includes('색')) return {icon:'🎨', label:'비슷한 색'};
   return {icon:'🤝', label:'친구찾기'};
 }
 
@@ -230,7 +260,7 @@ function App(){
   return <TV {...{phase, missionCount, setMissionCount, timeOption, setTimeOption, customTime, setCustomTime, missionScope, setMissionScope, missions, setMissions, startGame, countdownStart, nextMission, addScore, newName, setNewName, scores, resetGame, currentMission, roundIndex, rounds, remaining, soundLevel, setSoundLevel, ensureAudio, qrUrl, openRemote, audioReady, managerOpen, setManagerOpen, resetMissionHistory}} />;
 }
 
-function Header({openRemote}){return <header className="top"><div className="brand"><div className="logo"><Handshake size={30}/></div><div><h1>친구찾기 챌린지 V6</h1><p>쌤플레이 게임실험실 안에서 테스트하는 친구찾기 챌린지 독립 테스트판</p></div></div><div className="topBtns"><button onClick={()=>location.reload()}>처음으로</button><button onClick={openRemote} className="primary"><ExternalLink size={16}/> 리모컨 새창</button><button className="test">테스트 전용</button></div></header>}
+function Header({openRemote}){return <header className="top"><div className="brand"><div className="logo"><Handshake size={30}/></div><div><h1>친구찾기 챌린지 V7</h1><p>쌤플레이 게임실험실 안에서 테스트하는 친구찾기 챌린지 독립 테스트판</p></div></div><div className="topBtns"><button onClick={()=>location.reload()}>처음으로</button><button onClick={openRemote} className="primary"><ExternalLink size={16}/> 리모컨 새창</button><button className="test">테스트 전용</button></div></header>}
 function TV(props){
   const {phase, openRemote, qrUrl, soundLevel, setSoundLevel, ensureAudio} = props;
   const soundOn = soundLevel !== 'off';
@@ -243,16 +273,16 @@ function Mission({currentMission, roundIndex, rounds, remaining}){
   const text = currentMission?.text || '';
   const lines = splitMissionText(text);
   const visual = visualForMission(text);
-  const len = text.replace(/\s/g,'').length;
-  const cls = len > 24 ? 'veryLongMission' : len > 16 ? 'longMission' : 'shortMission';
-  return <section className="mission fullMission"><div className="missionTop"><span>친구찾기 미션 {roundIndex+1} / {rounds.length}</span><b>걸어서 찾아요!</b></div><div className={`missionText ${cls}`}>{lines.map((line,i)=><div className="missionLine" key={i}>{line}</div>)}</div><div className="missionBottom"><div className="sideVisual left" aria-label={visual.label}><span>{visual.icon}</span><em>{visual.label}</em></div><div className="timerBlock"><div className="bar"><i style={{width:`${Math.max(0, Math.min(100, remaining/15*100))}%`}}/></div><div className="timeBig">{remaining}초</div><p className="safeText">선생님 신호에 멈춰요.</p></div><div className="sideVisual right" aria-hidden="true"><span>{visual.icon}</span></div></div></section>
+  const compactLen = text.replace(/\s/g,'').length;
+  const cls = lines.length >= 3 || compactLen > 18 ? 'veryLongMission' : lines.length === 2 || compactLen > 9 ? 'longMission' : 'shortMission';
+  return <section className="mission fullMission"><div className="missionTop"><span>친구찾기 미션 {roundIndex+1} / {rounds.length}</span><b>걸어서 찾아요!</b></div><div className={`missionText ${cls}`}>{lines.map((line,i)=><div className="missionLine" key={i}>{line}</div>)}</div><div className="missionBottom"><div className="sideVisual left" aria-label={visual.label}><span>{visual.icon}</span><em>{visual.label}</em></div><div className="timerBlock"><div className="bar"><i style={{width:`${Math.max(0, Math.min(100, remaining/15*100))}%`}}/></div><div className="timeBig">{remaining}초</div><p className="safeText">선생님 신호에 멈춰요.</p></div><div className="sideVisual right" aria-hidden="true"><span>{visual.icon}</span><em>{visual.label}</em></div></div></section>
 }
 function Stop({nextMission, roundIndex, rounds, newName, setNewName, addScore}){return <section className="panel stop"><h2>멈춰!</h2><h3>다음 미션 준비</h3><div className="scoreInput"><input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addScore()} placeholder="성공자 이름 예) 순신, 임당"/><button onClick={addScore}>성공자 기록</button></div><p className="inputHint">여러 명은 쉼표(,)로 구분해 입력하세요. 예: 순신, 임당</p><button className="bigStart" onClick={nextMission}>{roundIndex+1>=rounds.length?'결과 보기':'다음 미션'}</button></section>}
 function Finish({scores, resetGame}){
   const sorted=[...scores].sort((a,b)=>b.score-a.score || a.name.localeCompare(b.name, 'ko'));
   const topScore = sorted[0]?.score || 0;
   return <section className="panel finish"><h2>미션이 끝났습니다!</h2><h3>친구찾기 챌린지 결과</h3><div className="scoreList rankList">{sorted.length?sorted.map((s)=>{ const isTop = s.score === topScore; return <div key={s.name} className={isTop?'topRank':''}><span className="rankBadge">{isTop?'🏆 1등':'성공자'}</span><strong className="scoreName">{s.name}</strong><b>{s.score}점</b></div>}):<p>기록된 성공자가 없습니다.</p>}</div><button className="bigStart" onClick={resetGame}>설정으로</button></section>}
-function Remote(props){ const {phase,startGame,countdownStart,nextMission,resetGame,currentMission,roundIndex,rounds,remaining,newName,setNewName,addScore,scores,soundLevel,setSoundLevel,ensureAudio,openRemote}=props; return <div className="remote"><h1>친구찾기 리모컨 V6</h1><p className="badge">현재: {phase}</p>{currentMission&&<div className="remoteMission">{roundIndex+1}/{rounds.length}<br/>{currentMission.text}<br/><b>{remaining}초</b></div>}<button onClick={startGame} className="primary wide">시작</button><button onClick={countdownStart} className="wide">다음 진행</button><button onClick={nextMission} className="wide">다음 미션</button><div className="scoreInput remoteScore"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="성공자 예) 순신, 임당"/><button onClick={addScore}>+1 기록</button></div><p className="inputHint">여러 명은 쉼표(,)로 구분해 입력하세요.</p><div className="remoteSound"><label>효과음 크기</label><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/></div><button onClick={openRemote} className="wide">리모컨 새창</button><button onClick={resetGame} className="wide danger">설정으로</button><h2>점수표</h2>{[...scores].sort((a,b)=>b.score-a.score).map(s=><div className="rScore" key={s.name}>{s.name}<b>{s.score}</b></div>)}</div>}
+function Remote(props){ const {phase,startGame,countdownStart,nextMission,resetGame,currentMission,roundIndex,rounds,remaining,newName,setNewName,addScore,scores,soundLevel,setSoundLevel,ensureAudio,openRemote}=props; return <div className="remote"><h1>친구찾기 리모컨 V7</h1><p className="badge">현재: {phase}</p>{currentMission&&<div className="remoteMission">{roundIndex+1}/{rounds.length}<br/>{currentMission.text}<br/><b>{remaining}초</b></div>}<button onClick={startGame} className="primary wide">시작</button><button onClick={countdownStart} className="wide">다음 진행</button><button onClick={nextMission} className="wide">다음 미션</button><div className="scoreInput remoteScore"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="성공자 예) 순신, 임당"/><button onClick={addScore}>+1 기록</button></div><p className="inputHint">여러 명은 쉼표(,)로 구분해 입력하세요.</p><div className="remoteSound"><label>효과음 크기</label><Select value={soundLevel} onChange={(v)=>{ensureAudio(); setSoundLevel(v)}} options={soundOptions}/></div><button onClick={openRemote} className="wide">리모컨 새창</button><button onClick={resetGame} className="wide danger">설정으로</button><h2>점수표</h2>{[...scores].sort((a,b)=>b.score-a.score).map(s=><div className="rScore" key={s.name}>{s.name}<b>{s.score}</b></div>)}</div>}
 function MissionManagerModal({missions,setMissions,onClose}){ const [text,setText]=useState(''); const add=()=>{if(!text.trim())return; setMissions([...missions,{id:Date.now()+'' ,text:text.trim(),favorite:true,excluded:false,deleted:false,base:false}]);setText('')}; const update=(id,patch)=>setMissions(missions.map(m=>m.id===id?{...m,...patch}:m)); const hide=(m)=>update(m.id,{deleted:true}); const removeCustom=(m)=>{ if(confirm('추가한 미션을 삭제할까요?')) setMissions(missions.filter(x=>x.id!==m.id)); }; const restore=()=>setMissions(missions.map(m=>m.base?{...m,deleted:false,excluded:false}:m)); const hidden=missions.filter(m=>m.deleted); return <div className="modalOverlay"><div className="managerModal"><div className="managerHead"><div><h3>미션 관리자</h3><p>수업 시작 화면과 분리된 PC 전용 관리 화면입니다. 기본 미션은 삭제되지 않고 숨김 처리됩니다.</p></div><button onClick={onClose}>닫기</button></div><div className="add"><input value={text} onChange={e=>setText(e.target.value)} placeholder="새 미션 추가"/><button onClick={add}><Plus size={16}/>추가</button><button onClick={restore}><RotateCcw size={16}/>기본 미션 복구</button></div><div className="missionList adminList">{missions.filter(m=>!m.deleted).slice(0,120).map(m=><div className="mItem" key={m.id}><button onClick={()=>update(m.id,{favorite:!m.favorite})} className={m.favorite?'star on':'star'}><Star size={16}/></button><input value={m.text} onChange={e=>update(m.id,{text:e.target.value})}/><button onClick={()=>update(m.id,{excluded:!m.excluded})} className={m.excluded?'x on':'x'}>X</button><button onClick={()=>m.base?hide(m):removeCustom(m)}>{m.base?'숨김':'삭제'}</button></div>)}</div>{hidden.length>0&&<details className="hiddenBox"><summary>숨긴 미션 보기/복구 ({hidden.length})</summary>{hidden.map(m=><div className="mItem" key={m.id}><input value={m.text} onChange={e=>update(m.id,{text:e.target.value})}/><button onClick={()=>update(m.id,{deleted:false})}>복구</button></div>)}</details>}</div></div>}
 function Control({label,children}){return <div className="control"><label>{label}</label>{children}</div>}
 function Select({value,onChange,options}){return <select value={value} onChange={e=>onChange(e.target.value)}>{options.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select>}
